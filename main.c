@@ -151,7 +151,7 @@ void writeEEPROM(uint16_t address, uint8_t data)
     }
     nrf_gpio_pin_write(write_en, 1); // Set latch low
     // delay for next write
-    nrf_delay_ms(1);
+    nrf_delay_ms(10);
 }
 
 
