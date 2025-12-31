@@ -1,6 +1,6 @@
 /*
-Program to write data to an EEPROM using a shift register 74HC595.
-This code is designed to run on an nRF52840 dongle.
+This program is to write data to an EEPROM using a shift register 74HC595.
+This code is designed to run on nRF52840 dongle.
 */
 
 #include <stdbool.h>
@@ -30,7 +30,7 @@ const uint32_t data_pins[] = {D0, D1, D2, D3, D4, D5, D6, D7};
 #define MI  0b0100000000000000
 #define RI  0b0010000000000000
 #define RO  0b0001000000000000
-#define TR  0b0000100000000000
+#define SR  0b0000100000000000
 #define II  0b0000010000000000
 #define AI  0b0000001000000000
 #define AO  0b0000000100000000
@@ -44,32 +44,38 @@ const uint32_t data_pins[] = {D0, D1, D2, D3, D4, D5, D6, D7};
 #define FI  0b0000000000000001
 
 
+#define mask 0b0101111110100111
+
+
+
 #define FLAGS_Z0C0 0
 #define FLAGS_Z0C1 1
 #define FLAGS_Z1C0 2
 #define FLAGS_Z1C1 3
 
-#define JC 0b0111
-#define JZ 0b1000
+// pin 7 eeprom select
+// pin 8 and pin 9
+#define JC 0b0111 
+#define JZ 0b1000 
 
 
 uint16_t ucode_template[16][8] = {
-    { MI|CO, RO|II|CE, TR,    0,        0,           0,           0, 0 },  // 0 NOP
-    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, RO|AI,       TR,          0, 0 },  // 1 LDA
-    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, RO|BI,       EO|FI|AI,    TR, 0 }, // 2 ADD
-    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, RO|BI,       SU|EO|FI|AI, TR, 0 }, // 3 SUB
-    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, AO|RI,       TR,          0, 0 },  // 4 STA
-    { MI|CO, RO|II|CE, MI|CO, RO|AI|CE, TR,          0,           0, 0 },  // 5 LDI
-    { MI|CO, RO|II|CE, MI|CO, RO|J,     TR,          0,           0, 0 },  // 6 JMP
-    { MI|CO, RO|II|CE, CE,    TR,       0,           0,           0, 0 },  // 7 JC
-    { MI|CO, RO|II|CE, CE,    TR,       0,           0,           0, 0 },  // 8 JZ
-    { MI|CO, RO|II|CE, MI|CO, RO|BI|CE, EO|FI|AI,    TR,          0, 0 },  // 9 ADI
-    { MI|CO, RO|II|CE, MI|CO, RO|BI|CE, SU|EO|FI|AI, TR,          0, 0 },  // 10 SUI
-    { MI|CO, RO|II|CE, TR,    0,        0,           0,           0, 0 },  // 11 NOP
-    { MI|CO, RO|II|CE, TR,    0,        0,           0,           0, 0 },  // 12 NOP
-    { MI|CO, RO|II|CE, TR,    0,        0,           0,           0, 0 },  // 13 NOP
-    { MI|CO, RO|II|CE, AO|OI, TR,       0,           0,           0, 0 },  // 14 OUT
-    { MI|CO, RO|II|CE, HLT,   0,        0,           0,           0, 0 },  // 15 HLT
+    { MI|CO, RO|II|CE, SR,    0,        0,           0,           0,  0 },  // 0 NOP
+    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, RO|AI,       SR,          0,  0 },  // 1 LDA
+    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, RO|BI,       EO|FI|AI,    SR, 0 },  // 2 ADD
+    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, RO|BI,       SU|EO|FI|AI, SR, 0 },  // 3 SUB
+    { MI|CO, RO|II|CE, MI|CO, RO|MI|CE, AO|RI,       SR,          0,  0 },  // 4 STA
+    { MI|CO, RO|II|CE, MI|CO, RO|AI|CE, SR,          0,           0,  0 },  // 5 LDI
+    { MI|CO, RO|II|CE, MI|CO, RO|J,     SR,          0,           0,  0 },  // 6 JMP
+    { MI|CO, RO|II|CE, CE,    SR,       0,           0,           0,  0 },  // 7 JC
+    { MI|CO, RO|II|CE, CE,    SR,       0,           0,           0,  0 },  // 8 JZ
+    { MI|CO, RO|II|CE, MI|CO, RO|BI|CE, EO|FI|AI,    SR,          0,  0 },  // 9 ADI
+    { MI|CO, RO|II|CE, MI|CO, RO|BI|CE, SU|EO|FI|AI, SR,          0,  0 },  // 10 SUI
+    { MI|CO, RO|II|CE, SR,    0,        0,           0,           0,  0 },  // 11 NOP
+    { MI|CO, RO|II|CE, SR,    0,        0,           0,           0,  0 },  // 12 NOP
+    { MI|CO, RO|II|CE, SR,    0,        0,           0,           0,  0 },  // 13 NOP
+    { MI|CO, RO|II|CE, AO|OI, SR,       0,           0,           0,  0 },  // 14 OUT
+    { MI|CO, RO|II|CE, HLT,   0,        0,           0,           0,  0 },  // 15 HLT
 };
 
 uint16_t ucode[4][16][8];
@@ -80,30 +86,30 @@ void init_ucode()
     {
         for (int j = 0; j < 8; j++)
         {
-            ucode[FLAGS_Z0C0][i][j] = ucode_template[i][j];
-            ucode[FLAGS_Z0C1][i][j] = ucode_template[i][j];
-            ucode[FLAGS_Z1C0][i][j] = ucode_template[i][j];
-            ucode[FLAGS_Z1C1][i][j] = ucode_template[i][j];
+            ucode[FLAGS_Z0C0][i][j] = ucode_template[i][j] ^ mask;
+            ucode[FLAGS_Z0C1][i][j] = ucode_template[i][j] ^ mask;
+            ucode[FLAGS_Z1C0][i][j] = ucode_template[i][j] ^ mask;
+            ucode[FLAGS_Z1C1][i][j] = ucode_template[i][j] ^ mask;
         }
     }
     // ZF = 0, CF = 1
-    ucode[FLAGS_Z0C1][JC][2] = MI|CO;
-    ucode[FLAGS_Z0C1][JC][3] = RO|J;
-    ucode[FLAGS_Z0C1][JC][2] = TR;
+    ucode[FLAGS_Z0C1][JC][2] = (MI|CO) ^ mask;
+    ucode[FLAGS_Z0C1][JC][3] = (RO|J)  ^ mask;
+    ucode[FLAGS_Z0C1][JC][4] = SR      ^ mask;
 
     // ZF = 1, CF = 0
-    ucode[FLAGS_Z1C0][JZ][2] = MI|CO;
-    ucode[FLAGS_Z1C0][JZ][3] = RO|J;
-    ucode[FLAGS_Z1C0][JZ][4] = TR;
+    ucode[FLAGS_Z1C0][JZ][2] = (MI|CO) ^ mask;
+    ucode[FLAGS_Z1C0][JZ][3] = (RO|J)  ^ mask;
+    ucode[FLAGS_Z1C0][JZ][4] = SR      ^ mask;
 
     // ZF = 1, CF = 1
-    ucode[FLAGS_Z1C1][JZ][2] = MI|CO;
-    ucode[FLAGS_Z1C1][JZ][3] = RO|J;
-    ucode[FLAGS_Z1C1][JZ][4] = TR;
+    ucode[FLAGS_Z1C1][JZ][2] = (MI|CO) ^ mask;
+    ucode[FLAGS_Z1C1][JZ][3] = (RO|J)  ^ mask;
+    ucode[FLAGS_Z1C1][JZ][4] = SR      ^ mask;
     
-    ucode[FLAGS_Z1C1][JC][2] = MI|CO;
-    ucode[FLAGS_Z1C1][JC][3] = RO|J;
-    ucode[FLAGS_Z1C1][JC][4] = TR;
+    ucode[FLAGS_Z1C1][JC][2] = (MI|CO) ^ mask;
+    ucode[FLAGS_Z1C1][JC][3] = (RO|J)  ^ mask;
+    ucode[FLAGS_Z1C1][JC][4] = SR      ^ mask;
 }
 
 const uint8_t digits[] = {
